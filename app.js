@@ -4,7 +4,7 @@ const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function toast(s){const t=$('toast');t.textContent=s;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),3000)}
 function status(s){$('status').textContent=s}
-function rights(u){return /publicdomain|creativecommons\.org/i.test(String(u||''))}
+function rights(u){return /publicdomain|creativecommons\.org\/(?:publicdomain\/zero|licenses\/by\/|licenses\/by-sa\/)/i.test(String(u||''))}
 function poster(id){return IA+'/services/img/'+encodeURIComponent(id)}
 function card(x){return '<article class="movie-card" data-id="'+esc(x.identifier)+'"><div class="poster-wrap"><img loading="lazy" src="'+poster(x.identifier)+'" alt="'+esc(x.title||'Film artwork')+'" onerror="this.style.opacity=.12"><span class="rating">▶ PLAY</span></div><div class="card-title">'+esc(x.title||x.identifier)+'</div><div class="card-meta">'+esc(x.year||'Year unavailable')+' · '+esc(x.creator||'Internet Archive')+'</div></article>'}
 function queryForPage(){
