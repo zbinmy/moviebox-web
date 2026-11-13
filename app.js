@@ -1,67 +1,61 @@
-const API='https://api.themoviedb.org/3',IMG='https://image.tmdb.org/t/p/w500',IA='https://archive.org',PAGE_SIZE=24;
-const state={key:localStorage.getItem('mb_tmdb_key')||'',page:'home',query:'',pageNo:1,totalPages:1,sort:'popularity.desc',items:[],watchlist:JSON.parse(localStorage.getItem('mb_watchlist')||'[]'),type:'movie',archivePage:1,archiveTotal:0,archiveItems:[],busy:false};
+const IA='https://archive.org',PAGE=30;
+const state={page:'home',query:'',pageNo:1,total:0,items:[],list:JSON.parse(localStorage.getItem('mb_archive_list')||'[]'),busy:false};
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-function toast(s){const t=$('toast');t.textContent=s;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2600)}
-function setStatus(s){$('status').textContent=s}
-function title(x){return x.title||x.name||'Untitled'}
-function year(x){return (x.release_date||x.first_air_date||x.year||'').slice(0,4)||'—'}
-async function tmdb(path){if(!state.key)throw Error('Add your TMDB API key in Settings to load movies and TV metadata. Free Films does not need a key.');const sep=path.includes('?')?'&':'?';const r=await fetch(API+path+sep+'api_key='+encodeURIComponent(state.key));if(!r.ok)throw Error(r.status===401?'TMDB rejected the API key. Check Settings.':'TMDB request failed ('+r.status+').');return r.json()}
-function tmdbCard(x){const type=x.media_type||state.type,p=x.poster_path?IMG+x.poster_path:'';return '<article class="movie-card" data-id="'+x.id+'" data-type="'+type+'"><div class="poster-wrap">'+(p?'<img loading="lazy" src="'+p+'" alt="'+esc(title(x))+' poster">':'')+'<span class="rating">★ '+Number(x.vote_average||0).toFixed(1)+'</span></div><div class="card-title">'+esc(title(x))+'</div><div class="card-meta">'+year(x)+' · '+(type==='tv'?'TV':'Movie')+'</div></article>'}
-function archiveCard(x){return '<article class="movie-card" data-archive="'+esc(x.identifier)+'"><div class="poster-wrap"><img loading="lazy" src="'+IA+'/services/img/'+encodeURIComponent(x.identifier)+'" alt="'+esc(x.title||'Film poster')+'" onerror="this.style.display=\'none\'"><span class="rating">FREE</span></div><div class="card-title">'+esc(x.title||x.identifier)+'</div><div class="card-meta">'+esc(x.year||'Year unknown')+' · Internet Archive</div></article>'}
-async function loadTmdb(reset=true){
- if(reset){state.pageNo=1;$('grid').innerHTML=''}$('loadMore').classList.add('hidden');
- if(state.page==='watchlist'){renderWatchlist();return}
- if(!state.key){setStatus('Add your TMDB API key in Settings to load the live catalogue. Free Films works without a key.');return}
- setStatus('Loading catalogue…');
- try{let path;if(state.query)path='/search/multi?query='+encodeURIComponent(state.query)+'&include_adult=false&page='+state.pageNo;
- else{const sort=encodeURIComponent(state.sort);state.type=state.page==='tv'?'tv':'movie';if(state.page==='trending')path='/trending/all/week?page='+state.pageNo;else if(state.page==='movies')path='/discover/movie?sort_by='+sort+'&include_adult=false&page='+state.pageNo;else if(state.page==='tv')path='/discover/tv?sort_by='+sort+'&page='+state.pageNo;else path='/trending/all/week?page='+state.pageNo}
- const data=await tmdb(path);state.totalPages=Math.min(data.total_pages||1,500);const results=(data.results||[]).filter(x=>x.media_type!=='person'&&(x.poster_path||x.backdrop_path));if(reset){state.items=results;$('grid').innerHTML=results.map(tmdbCard).join('')}else{$('grid').insertAdjacentHTML('beforeend',results.map(tmdbCard).join(''));state.items.push(...results)}
- setStatus(results.length?(state.query?'Search results for “'+state.query+'”':(state.page==='home'?'Popular this week':state.page[0].toUpperCase()+state.page.slice(1))):'No titles found.');$('loadMore').classList.toggle('hidden',state.pageNo>=state.totalPages||!results.length)
- }catch(e){setStatus(e.message);toast(e.message)}
+function toast(s){const t=$('toast');t.textContent=s;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),3000)}
+function status(s){$('status').textContent=s}
+function rights(u){return /publicdomain|creativecommons\.org/i.test(String(u||''))}
+function poster(id){return IA+'/services/img/'+encodeURIComponent(id)}
+function card(x){return '<article class="movie-card" data-id="'+esc(x.identifier)+'"><div class="poster-wrap"><img loading="lazy" src="'+poster(x.identifier)+'" alt="'+esc(x.title||'Film artwork')+'" onerror="this.style.opacity=.12"><span class="rating">▶ PLAY</span></div><div class="card-title">'+esc(x.title||x.identifier)+'</div><div class="card-meta">'+esc(x.year||'Year unavailable')+' · '+esc(x.creator||'Internet Archive')+'</div></article>'}
+function queryForPage(){
+ let q='mediatype:movies AND (licenseurl:*publicdomain* OR licenseurl:*creativecommons.org*)';
+ if(state.page==='tv')q+=' AND (subject:television OR subject:"TV series" OR title:television)';
+ if(state.query){const words=state.query.replace(/[()+\-!{}\[\]^"~*?:\\/]/g,' ').trim().split(/\s+/).filter(Boolean);if(words.length)q+=' AND title:('+words.map(w=>'"'+w+'"').join(' AND ')+')'}
+ return q;
 }
-function renderWatchlist(){const a=state.watchlist;state.items=a;$('grid').innerHTML=a.map(tmdbCard).join('');setStatus(a.length?a.length+' saved title(s)':'Your list is empty. Open a title and choose Add to My List.')}
-async function loadArchive(reset=true){
- if(state.busy)return;if(reset){state.archivePage=1;state.archiveItems=[];$('grid').innerHTML=''}state.busy=true;$('loadMore').classList.add('hidden');setStatus('Finding full-length films…');
+async function load(reset=true){
+ if(state.busy)return;if(reset){state.pageNo=1;state.items=[];$('grid').innerHTML=''}
+ $('loadMore').classList.add('hidden');state.busy=true;status('Loading full-length films…');
  try{
-  const license='(licenseurl:*publicdomain* OR licenseurl:*zero/1.0* OR licenseurl:*licenses/by/* OR licenseurl:*licenses/by-sa/*)';
-  const clean=state.query.replace(/[()+\-!{}\[\]^"~*?:\\/]/g,' ').replace(/\s+/g,' ').trim();
-  const q='mediatype:movies AND '+license+(clean?' AND (title:('+clean.split(' ').map(w=>'"'+w.replace(/"/g,'')+'"').join(' AND ')+') OR subject:('+clean.split(' ').map(w=>'"'+w.replace(/"/g,'')+'"').join(' AND ')+'))':'');
-  const url=IA+'/advancedsearch.php?q='+encodeURIComponent(q)+'&fl[]=identifier&fl[]=title&fl[]=year&fl[]=creator&fl[]=licenseurl&rows='+PAGE_SIZE+'&page='+state.archivePage+'&output=json';
-  const r=await fetch(url);if(!r.ok)throw Error('Internet Archive search failed ('+r.status+').');const d=await r.json();const docs=(d.response?.docs||[]).filter(x=>x.identifier);
-  state.archiveTotal=d.response?.numFound||0;state.archiveItems.push(...docs);$('grid').innerHTML=state.archiveItems.map(archiveCard).join('');
-  setStatus(docs.length?state.archiveTotal.toLocaleString()+' Archive records match the rights-label search. Open a title to check its video file.':'No matching films found. Try a broader search.');
-  $('loadMore').classList.toggle('hidden',state.archiveItems.length>=state.archiveTotal||!docs.length);
- }catch(e){setStatus(e.message);toast(e.message)}finally{state.busy=false}
+  const p=new URLSearchParams();p.set('q',queryForPage());['identifier','title','year','creator','licenseurl','description'].forEach(f=>p.append('fl[]',f));p.set('rows',PAGE);p.set('page',state.pageNo);p.set('output','json');p.set('sort[]','downloads desc');
+  const r=await fetch(IA+'/advancedsearch.php?'+p.toString());if(!r.ok)throw Error('Internet Archive catalogue returned HTTP '+r.status);
+  const d=await r.json();const docs=(d.response?.docs||[]).filter(x=>x.identifier&&rights(x.licenseurl));
+  state.total=d.response?.numFound||0;state.items.push(...docs);$('grid').innerHTML=state.items.map(card).join('');
+  status(docs.length?state.total.toLocaleString()+' rights-labelled records found. Select a title to open its full-length player.':'No matching films returned. Try another search.');
+  $('loadMore').classList.toggle('hidden',!docs.length||state.items.length>=state.total);
+ }catch(e){status('Catalogue error: '+e.message);toast(e.message)}
+ finally{state.busy=false}
 }
-function page(p){state.page=p;state.query='';$('searchInput').value='';document.querySelectorAll('.nav').forEach(n=>n.classList.toggle('active',n.dataset.page===p));$('hero').classList.toggle('hidden',p!=='home');$('rightsFootnote').classList.toggle('hidden',p!=='freefilms');$('sortSelect').parentElement.classList.toggle('hidden',p==='freefilms'||p==='watchlist');$('sectionTitle').textContent=p==='home'?'Trending now':p==='watchlist'?'My List':p==='tv'?'TV Shows':p==='freefilms'?'Free full-length films':p[0].toUpperCase()+p.slice(1);$('sectionEyebrow').textContent=p==='watchlist'?'YOUR SAVED TITLES':p==='freefilms'?'PUBLIC DOMAIN & CREATIVE COMMONS':'DISCOVER';if(p==='freefilms')loadArchive();else loadTmdb()}
-function searchNow(q){state.query=q.trim();if(state.page==='freefilms'){loadArchive();return}if(state.query){state.page='search';$('hero').classList.add('hidden');$('sectionTitle').textContent='Search';$('sectionEyebrow').textContent='FIND A TITLE';document.querySelectorAll('.nav').forEach(n=>n.classList.remove('active'));loadTmdb()}else page('home')}
-async function openDetail(id,type){
- try{const d=await tmdb('/'+(type==='tv'?'tv':'movie')+'/'+id+'?append_to_response=videos,credits');const isTV=type==='tv',name=title(d),videos=d.videos?.results||[],trailer=videos.find(v=>v.site==='YouTube'&&v.type==='Trailer'&&v.official)||videos.find(v=>v.site==='YouTube'&&v.type==='Trailer'),saved=state.watchlist.some(x=>x.id===d.id&&x.media_type===type),poster=d.poster_path?IMG+d.poster_path:'';
- $('detailContent').innerHTML='<div class="detail-layout">'+(poster?'<img class="detail-poster" src="'+poster+'" alt="">':'<div></div>')+'<div class="detail-copy"><span class="eyebrow">'+(isTV?'TV SERIES':'FEATURE FILM')+'</span><h2>'+esc(name)+'</h2><div class="detail-meta">★ '+Number(d.vote_average||0).toFixed(1)+' · '+year(d)+' · '+esc((d.genres||[]).map(g=>g.name).join(' / '))+'</div><p>'+esc(d.overview||'No synopsis available.')+'</p><div class="detail-actions"><button class="primary-btn" id="trailerBtn" '+(!trailer?'disabled':'')+'>'+(trailer?'▶ Watch trailer':'Trailer unavailable')+'</button><button class="secondary-btn" id="saveBtn">'+(saved?'♥ In My List':'♡ Add to My List')+'</button></div><div id="trailerSlot"></div><p class="settings-help">Full-length playback is available only through authorised streaming providers. Free Films is a separate catalogue of Archive-hosted titles.</p></div></div>';
- $('detailModal').classList.remove('hidden');$('trailerBtn')?.addEventListener('click',()=>{if(trailer)$('trailerSlot').innerHTML='<iframe class="trailer" src="https://www.youtube-nocookie.com/embed/'+encodeURIComponent(trailer.key)+'" title="Official trailer" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>'});
- $('saveBtn').addEventListener('click',()=>{const i=state.watchlist.findIndex(x=>x.id===d.id&&x.media_type===type);if(i>=0)state.watchlist.splice(i,1);else state.watchlist.unshift({id:d.id,media_type:type,title:d.title,name:d.name,poster_path:d.poster_path,release_date:d.release_date,first_air_date:d.first_air_date,vote_average:d.vote_average});localStorage.setItem('mb_watchlist',JSON.stringify(state.watchlist));$('saveBtn').textContent=i>=0?'♡ Add to My List':'♥ In My List';toast(i>=0?'Removed from My List':'Added to My List');if(state.page==='watchlist')renderWatchlist()})
- }catch(e){toast(e.message)}
+function page(p){
+ state.page=p;state.query='';$('searchInput').value='';document.querySelectorAll('.nav').forEach(n=>n.classList.toggle('active',n.dataset.page===p));
+ $('hero').classList.toggle('hidden',p!=='home');$('rightsFootnote').classList.toggle('hidden',p!=='freefilms');
+ $('sortSelect').parentElement.classList.add('hidden');
+ $('sectionTitle').textContent=({home:'Featured full-length films',trending:'Popular on the Archive',movies:'Movies',tv:'Television & series',freefilms:'Free full-length films',watchlist:'My List'})[p]||'Films';
+ $('sectionEyebrow').textContent=p==='watchlist'?'YOUR SAVED TITLES':'PUBLIC DOMAIN & CREATIVE COMMONS';
+ if(p==='watchlist'){renderList();return}load();
 }
-function allowedLicense(u){return /publicdomain|creativecommons\.org\/publicdomain\/zero|creativecommons\.org\/licenses\/by\/|creativecommons\.org\/licenses\/by-sa\//i.test(String(u||''))}
-function videoFiles(files){const a=(files||[]).filter(f=>f.name&&!f.name.includes('__ia_thumb')&&/\.(mp4|webm|ogv)$/i.test(f.name));a.sort((x,y)=>(/\.mp4$/i.test(y.name)?1:0)-(/\.mp4$/i.test(x.name)?1:0));return a}
-async function openArchiveFilm(id){
- $('detailContent').innerHTML='<div class="player-loading">Checking rights and browser-playable video files…</div>';$('detailModal').classList.remove('hidden');
- try{const r=await fetch(IA+'/metadata/'+encodeURIComponent(id));if(!r.ok)throw Error('Could not load this Archive record.');const item=await r.json(),m=item.metadata||{},lic=m.licenseurl||'';if(!allowedLicense(lic))throw Error('This item does not show a supported rights label. Playback is disabled.');
- const file=videoFiles(item.files)[0];if(!file)throw Error('No MP4, WebM or OGV file was found for this record.');const src=IA+'/download/'+encodeURIComponent(id)+'/'+file.name.split('/').map(encodeURIComponent).join('/'),desc=String(m.description||'').replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').slice(0,900);
- $('detailContent').innerHTML='<div class="watch-layout"><div class="watch-player"><video id="filmPlayer" controls playsinline preload="metadata" poster="'+IA+'/services/img/'+encodeURIComponent(id)+'"><source src="'+src+'" type="'+(file.name.toLowerCase().endsWith('.webm')?'video/webm':file.name.toLowerCase().endsWith('.ogv')?'video/ogg':'video/mp4')+'"></video></div><div class="watch-info"><span class="eyebrow">FULL-LENGTH FILM · INTERNET ARCHIVE</span><h2>'+esc(m.title||id)+'</h2><div class="detail-meta">'+esc(m.year||m.date||'Date unknown')+' · '+esc(m.runtime||'Runtime not listed')+'</div><p>'+esc(desc||'No description supplied.')+'</p><div class="license-note"><b>Rights label:</b> <a href="'+esc(lic)+'" target="_blank" rel="noopener">View licence ↗</a><br><small>Uploader-supplied rights label. Verify before reuse or redistribution.</small></div><div class="detail-actions"><a class="secondary-btn" href="'+IA+'/details/'+encodeURIComponent(id)+'" target="_blank" rel="noopener">Open Archive record ↗</a></div></div></div>';
- $('filmPlayer').addEventListener('error',()=>toast('The selected file failed to play in this browser. Try the Archive record link.'));
+function renderList(){const items=state.list;$('grid').innerHTML=items.map(card).join('');status(items.length?items.length+' saved film(s)':'Your list is empty. Open a film and save it to My List.')}
+function search(q){state.query=q.trim();if(state.page==='watchlist')state.page='home';$('hero').classList.add('hidden');$('sectionTitle').textContent=state.query?'Search results':'Featured full-length films';$('sectionEyebrow').textContent='SEARCH THE ARCHIVE';document.querySelectorAll('.nav').forEach(n=>n.classList.remove('active'));load()}
+async function openFilm(id){
+ $('detailContent').innerHTML='<div class="player-loading">Loading the Internet Archive player…</div>';$('detailModal').classList.remove('hidden');
+ try{
+  const r=await fetch(IA+'/metadata/'+encodeURIComponent(id));if(!r.ok)throw Error('Could not retrieve this film record (HTTP '+r.status+').');
+  const item=await r.json(),m=item.metadata||{},lic=m.licenseurl||'';
+  if(!rights(lic))throw Error('No public-domain or Creative Commons rights label was found. Playback is disabled.');
+  const files=(item.files||[]).filter(f=>f.name&&!f.name.includes('__ia_thumb')&&/\.(mp4|webm|ogv|m3u8)$/i.test(f.name));
+  if(!files.length)throw Error('The record has no recognised browser video file. Open the source record to check available formats.');
+  const name=m.title||id,desc=String(m.description||'').replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').slice(0,900);
+  const saved=state.list.some(x=>x.identifier===id);
+  $('detailContent').innerHTML='<div class="watch-layout"><div class="watch-player"><iframe class="archive-frame" src="'+IA+'/embed/'+encodeURIComponent(id)+'?autoplay=0&play=1" title="'+esc(name)+' full-length film player" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen loading="eager" referrerpolicy="strict-origin-when-cross-origin"></iframe></div><div class="watch-info"><span class="eyebrow">FULL-LENGTH FILM · INTERNET ARCHIVE</span><h2>'+esc(name)+'</h2><div class="detail-meta">'+esc(m.year||m.date||'Year unavailable')+' · '+esc(m.runtime||'Runtime not listed')+'</div><p>'+esc(desc||'No description supplied.')+'</p><div class="license-note"><b>Rights label:</b> <a href="'+esc(lic)+'" target="_blank" rel="noopener">View licence ↗</a><br><small>Rights are declared by the uploader. Verify the licence and applicable local law.</small></div><div class="detail-actions"><button class="secondary-btn" id="saveFilm">'+(saved?'♥ Saved to My List':'♡ Add to My List')+'</button><a class="secondary-btn" href="'+IA+'/details/'+encodeURIComponent(id)+'" target="_blank" rel="noopener">Source record ↗</a></div><p class="player-help">If the embedded player is blocked by your browser, use Source record to play the film on Internet Archive.</p></div></div>';
+  $('saveFilm').addEventListener('click',()=>{const i=state.list.findIndex(x=>x.identifier===id);if(i>=0)state.list.splice(i,1);else state.list.unshift({identifier:id,title:m.title,year:m.year,creator:m.creator,licenseurl:lic});localStorage.setItem('mb_archive_list',JSON.stringify(state.list));$('saveFilm').textContent=i>=0?'♡ Add to My List':'♥ Saved to My List';toast(i>=0?'Removed from My List':'Saved to My List');if(state.page==='watchlist')renderList()});
  }catch(e){$('detailContent').innerHTML='<div class="player-loading">'+esc(e.message)+'</div>';toast(e.message)}
 }
-let searchTimer; $('searchInput').addEventListener('input',e=>{clearTimeout(searchTimer);searchTimer=setTimeout(()=>searchNow(e.target.value),450)});
+let timer;$('searchInput').addEventListener('input',e=>{clearTimeout(timer);timer=setTimeout(()=>search(e.target.value),500)});
 document.querySelectorAll('.nav').forEach(n=>n.addEventListener('click',()=>page(n.dataset.page)));
 $('heroExplore').addEventListener('click',()=>page('trending'));
-$('sortSelect').addEventListener('change',e=>{state.sort=e.target.value;loadTmdb()});
-$('loadMore').addEventListener('click',()=>{if(state.page==='freefilms'){state.archivePage++;loadArchive(false)}else{state.pageNo++;loadTmdb(false)}});
-$('settingsBtn').addEventListener('click',()=>{$('apiKeyInput').value=state.key;$('settingsModal').classList.remove('hidden')});
-$('saveKey').addEventListener('click',()=>{const k=$('apiKeyInput').value.trim();if(!k){toast('Enter your TMDB API key.');return}state.key=k;localStorage.setItem('mb_tmdb_key',k);$('settingsModal').classList.add('hidden');toast('API key saved in this browser.');if(state.page!=='freefilms')loadTmdb()});
-$('clearKey').addEventListener('click',()=>{state.key='';localStorage.removeItem('mb_tmdb_key');$('apiKeyInput').value='';$('settingsModal').classList.add('hidden');if(state.page!=='freefilms'){ $('grid').innerHTML='';setStatus('API key removed. Add a key in Settings to reconnect.')}});
-document.addEventListener('click',e=>{if(e.target.dataset.close){$('detailModal').classList.add('hidden');$('settingsModal').classList.add('hidden')}const c=e.target.closest('.movie-card');if(c){if(c.dataset.archive)openArchiveFilm(c.dataset.archive);else openDetail(c.dataset.id,c.dataset.type)}});
-document.addEventListener('keydown',e=>{if(e.key==='Escape'){$('detailModal').classList.add('hidden');$('settingsModal').classList.add('hidden')}});
+$('loadMore').addEventListener('click',()=>{state.pageNo++;load(false)});
+$('sortSelect').parentElement.classList.add('hidden');
+document.addEventListener('click',e=>{if(e.target.dataset.close)$('detailModal').classList.add('hidden');const c=e.target.closest('.movie-card');if(c)openFilm(c.dataset.id)});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')$('detailModal').classList.add('hidden')});
 if('serviceWorker'in navigator&&location.protocol.startsWith('http'))window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
-if(state.key)loadTmdb();else setStatus('Add your TMDB API key in Settings to load the live catalogue. Free Films works without a key.');
+load();
