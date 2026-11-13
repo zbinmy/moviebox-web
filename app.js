@@ -1,28 +1,55 @@
-const API='https://api.themoviedb.org/3';const IMG='https://image.tmdb.org/t/p/w500';const BACKDROP='https://image.tmdb.org/t/p/w1280';
-const state={key:localStorage.getItem('mb_tmdb_key')||'',page:'home',query:'',pageNo:1,totalPages:1,sort:'popularity.desc',items:[],watchlist:JSON.parse(localStorage.getItem('mb_watchlist')||'[]'),type:'movie'};
+const IA='https://archive.org', PAGE_SIZE=30;
+const state={page:1,query:'',total:0,items:[],busy:false};
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-function toast(s){const t=$('toast');t.textContent=s;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2400)}
-function headers(){return {'accept':'application/json'}}
-async function api(path){if(!state.key)throw Error('Add your TMDB API key in Settings first.');const sep=path.includes('?')?'&':'?';const r=await fetch(API+path+sep+'api_key='+encodeURIComponent(state.key),{headers:headers()});if(!r.ok)throw Error(r.status===401?'TMDB rejected the API key. Check Settings.':('TMDB request failed ('+r.status+').'));return r.json()}
-function setStatus(s){$('status').textContent=s}
-function year(x){return (x.release_date||x.first_air_date||'').slice(0,4)||'—'}
-function title(x){return x.title||x.name||'Untitled'}
-function card(x){const poster=x.poster_path?IMG+x.poster_path:'';return '<article class="movie-card" data-id="'+x.id+'" data-type="'+(x.media_type||state.type)+'"><div class="poster-wrap">'+(poster?'<img loading="lazy" src="'+poster+'" alt="'+esc(title(x))+' poster">':'')+'<span class="rating">★ '+(Number(x.vote_average||0).toFixed(1))+'</span></div><div class="card-title">'+esc(title(x))+'</div><div class="card-meta">'+year(x)+' · '+((x.media_type||state.type)==='tv'?'TV':'Movie')+'</div></article>'}
-async function load(reset=true){if(reset){state.pageNo=1;$('grid').innerHTML=''}$('loadMore').classList.add('hidden');if(!state.key){setStatus('Add your TMDB API key in Settings to load the live catalogue.');return}setStatus('Loading catalogue…');try{let path;if(state.page==='watchlist'){renderWatchlist();return}if(state.query){path='/search/multi?query='+encodeURIComponent(state.query)+'&include_adult=false&page='+state.pageNo}else{const type=state.page==='tv'?'tv':'movie';state.type=type;const sort=encodeURIComponent(state.sort);if(state.page==='trending')path='/trending/all/week?page='+state.pageNo;else if(state.page==='movies')path='/discover/movie?sort_by='+sort+'&include_adult=false&page='+state.pageNo;else if(state.page==='tv')path='/discover/tv?sort_by='+sort+'&page='+state.pageNo;else path='/trending/all/week?page='+state.pageNo}const data=await api(path);state.totalPages=Math.min(data.total_pages||1,500);const results=(data.results||[]).filter(x=>x.media_type!=='person'&&(x.poster_path||x.backdrop_path));if(reset){state.items=results;$('grid').innerHTML=results.map(card).join('')}else{$('grid').insertAdjacentHTML('beforeend',results.map(card).join(''));state.items.push(...results)}setStatus(results.length?(state.query?'Search results for “'+state.query+'”':(state.page==='home'?'Popular this week':state.page[0].toUpperCase()+state.page.slice(1))):'No titles found.');$('loadMore').classList.toggle('hidden',state.pageNo>=state.totalPages||!results.length)}catch(e){setStatus(e.message);toast(e.message)}}
-function renderWatchlist(){const items=state.watchlist;state.items=items;$('grid').innerHTML=items.map(card).join('');setStatus(items.length?items.length+' saved title(s)':'Your list is empty. Open a title and choose Add to My List.')}
-async function openDetail(id,type){try{const d=await api('/'+(type==='tv'?'tv':'movie')+'/'+id+'?append_to_response=videos,credits');const isTV=type==='tv';const name=title(d);const trailer=(d.videos?.results||[]).find(v=>v.site==='YouTube'&&v.type==='Trailer'&&v.official)|| (d.videos?.results||[]).find(v=>v.site==='YouTube'&&v.type==='Trailer');const saved=state.watchlist.some(x=>x.id===d.id&&x.media_type===type);const poster=d.poster_path?IMG+d.poster_path:'';$('detailContent').innerHTML='<div class="detail-layout">'+(poster?'<img class="detail-poster" src="'+poster+'" alt="">':'<div></div>')+'<div class="detail-copy"><span class="eyebrow">'+(isTV?'TV SERIES':'FEATURE FILM')+'</span><h2>'+esc(name)+'</h2><div class="detail-meta">★ '+Number(d.vote_average||0).toFixed(1)+' · '+year(d)+' · '+esc((d.genres||[]).map(g=>g.name).join(' / '))+'</div><p>'+esc(d.overview||'No synopsis available.')+'</p><div class="detail-actions"><button class="primary-btn" id="trailerBtn" '+(!trailer?'disabled':'')+'>'+ (trailer?'▶ Watch trailer':'Trailer unavailable')+'</button><button class="secondary-btn" id="saveBtn">'+(saved?'♥ In My List':'♡ Add to My List')+'</button></div><div id="trailerSlot"></div><p class="settings-help">This page provides discovery metadata and official trailers. It does not extract or proxy unauthorised streams. Use a licensed provider to watch the full title.</p></div></div>';$('detailModal').classList.remove('hidden');$('trailerBtn')?.addEventListener('click',()=>{if(trailer)$('trailerSlot').innerHTML='<iframe class="trailer" src="https://www.youtube-nocookie.com/embed/'+encodeURIComponent(trailer.key)+'" title="Official trailer" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>'});$('saveBtn').addEventListener('click',()=>{const i=state.watchlist.findIndex(x=>x.id===d.id&&x.media_type===type);if(i>=0)state.watchlist.splice(i,1);else state.watchlist.unshift({id:d.id,media_type:type,title:d.title,name:d.name,poster_path:d.poster_path,release_date:d.release_date,first_air_date:d.first_air_date,vote_average:d.vote_average});localStorage.setItem('mb_watchlist',JSON.stringify(state.watchlist));$('saveBtn').textContent=i>=0?'♡ Add to My List':'♥ In My List';toast(i>=0?'Removed from My List':'Added to My List');if(state.page==='watchlist')renderWatchlist()})}catch(e){toast(e.message)}}
-function page(p){state.page=p;state.query='';$('searchInput').value='';document.querySelectorAll('.nav').forEach(n=>n.classList.toggle('active',n.dataset.page===p));$('hero').classList.toggle('hidden',p!=='home');$('sectionTitle').textContent=p==='home'?'Trending now':p==='watchlist'?'My List':p==='tv'?'TV Shows':p[0].toUpperCase()+p.slice(1);$('sectionEyebrow').textContent=p==='watchlist'?'YOUR SAVED TITLES':'DISCOVER';load()}
-let searchTimer;function doSearch(q){state.query=q.trim();if(state.query){state.page='search';$('hero').classList.add('hidden');$('sectionTitle').textContent='Search';$('sectionEyebrow').textContent='FIND A TITLE';document.querySelectorAll('.nav').forEach(n=>n.classList.remove('active'));load()}else page('home')}
-$('searchInput').addEventListener('input',e=>{clearTimeout(searchTimer);searchTimer=setTimeout(()=>doSearch(e.target.value),400)});
-document.querySelectorAll('.nav').forEach(n=>n.addEventListener('click',()=>page(n.dataset.page)));
-$('heroExplore').addEventListener('click',()=>page('trending'));
-$('sortSelect').addEventListener('change',e=>{state.sort=e.target.value;load()});
-$('loadMore').addEventListener('click',()=>{state.pageNo++;load(false)});
-$('settingsBtn').addEventListener('click',()=>{$('apiKeyInput').value=state.key;$('settingsModal').classList.remove('hidden')});
-$('saveKey').addEventListener('click',()=>{const k=$('apiKeyInput').value.trim();if(!k){toast('Enter your TMDB API key.');return}state.key=k;localStorage.setItem('mb_tmdb_key',k);$('settingsModal').classList.add('hidden');toast('API key saved in this browser.');load()});
-$('clearKey').addEventListener('click',()=>{state.key='';localStorage.removeItem('mb_tmdb_key');$('apiKeyInput').value='';$('settingsModal').classList.add('hidden');$('grid').innerHTML='';setStatus('API key removed. Add a key in Settings to reconnect.')});
-document.addEventListener('click',e=>{if(e.target.dataset.close)$('detailModal').classList.add('hidden'),$('settingsModal').classList.add('hidden');const c=e.target.closest('.movie-card');if(c)openDetail(c.dataset.id,c.dataset.type)});
-document.addEventListener('keydown',e=>{if(e.key==='Escape'){$('detailModal').classList.add('hidden');$('settingsModal').classList.add('hidden')}});
+const allowedLicense=u=>/publicdomain|creativecommons\.org\/publicdomain\/zero|creativecommons\.org\/licenses\/by\/|creativecommons\.org\/licenses\/by-sa\//i.test(String(u||''));
+function toast(s){const t=$('toast');t.textContent=s;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2600)}
+function status(s){$('status').textContent=s}
+function poster(id){return IA+'/services/img/'+encodeURIComponent(id)}
+function card(x){return '<article class="movie-card" data-id="'+esc(x.identifier)+'"><div class="poster-wrap"><img loading="lazy" src="'+poster(x.identifier)+'" alt="'+esc(x.title||'Film poster')+'" onerror="this.style.display=\'none\'"><span class="rating">FREE</span></div><div class="card-title">'+esc(x.title||x.identifier)+'</div><div class="card-meta">'+esc(x.year||'Year unknown')+' · '+esc(x.creator||'Internet Archive')+'</div></article>'}
+async function search(reset=true){
+ if(state.busy)return;
+ if(reset){state.page=1;state.items=[];$('grid').innerHTML=''}
+ state.busy=true;$('loadMore').classList.add('hidden');status('Finding full-length films with reusable rights…');
+ try{
+  const terms='mediatype:movies AND (licenseurl:http*publicdomain* OR licenseurl:http*zero/1.0* OR licenseurl:http*licenses/by/* OR licenseurl:http*licenses/by-sa/*)';
+  const q=state.query?terms+' AND (title:"'+state.query.replace(/[()+\-!{}\[\]^"~*?:\\/]/g,' ').replace(/\s+/g,' ').trim()+'" OR subject:"'+state.query.replace(/[()+\-!{}\[\]^"~*?:\\/]/g,' ').trim()+'")':terms;
+  const url=IA+'/advancedsearch.php?q='+encodeURIComponent(q)+'&fl[]=identifier&fl[]=title&fl[]=year&fl[]=creator&fl[]=licenseurl&rows='+PAGE_SIZE+'&page='+state.page+'&output=json';
+  const res=await fetch(url);if(!res.ok)throw Error('Internet Archive search failed ('+res.status+').');
+  const data=await res.json();const docs=(data.response?.docs||[]).filter(x=>x.identifier&&allowedLicense(x.licenseurl));
+  state.total=data.response?.numFound||0;state.items.push(...docs);
+  $('grid').innerHTML=state.items.map(card).join('');
+  status(docs.length?state.total.toLocaleString()+' rights-labelled film records found. Open a title to check its video file and play.':'No matching films found. Try a broader search.');
+  $('loadMore').classList.toggle('hidden',state.items.length>=state.total||docs.length===0);
+ }catch(e){status(e.message);toast(e.message)}
+ finally{state.busy=false}
+}
+function videoFiles(files){
+ const vids=(files||[]).filter(f=>!f.source&&f.name&&!f.name.includes('__ia_thumb')&&(/\.mp4$/i.test(f.name)||/\.webm$/i.test(f.name)||/\.ogv$/i.test(f.name))&&(/mpeg4|h\.264|webm|ogg|video/i.test(f.format||'')||/\.(mp4|webm|ogv)$/i.test(f.name)));
+ vids.sort((a,b)=>{const score=f=>(/\.mp4$/i.test(f.name)?100:0)+(/512kb|360p|480p|720p/i.test(f.name)?20:0)-(/original/i.test(f.name)?0:0);return score(b)-score(a)});
+ return vids;
+}
+async function openFilm(id){
+ try{
+  $('detailContent').innerHTML='<div class="player-loading">Checking rights and playable video files…</div>';$('detailModal').classList.remove('hidden');
+  const r=await fetch(IA+'/metadata/'+encodeURIComponent(id));if(!r.ok)throw Error('Could not load this Archive record.');
+  const item=await r.json(),m=item.metadata||{},lic=m.licenseurl||'';
+  if(!allowedLicense(lic))throw Error('This item does not show a supported public-domain or Creative Commons licence, so playback is disabled.');
+  const files=videoFiles(item.files),chosen=files[0];
+  if(!chosen)throw Error('No browser-playable MP4, WebM or OGV file was found for this record.');
+  const stream=IA+'/download/'+encodeURIComponent(id)+'/'+chosen.name.split('/').map(encodeURIComponent).join('/');
+  const title=m.title||id,desc=String(m.description||'').replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').slice(0,1000);
+  const captions=(item.files||[]).filter(f=>/\.vtt$/i.test(f.name||'')).slice(0,4);
+  $('detailContent').innerHTML='<div class="watch-layout"><div class="watch-player"><video id="filmPlayer" controls playsinline preload="metadata" poster="'+poster(id)+'"><source src="'+stream+'" type="'+(chosen.name.toLowerCase().endsWith('.webm')?'video/webm':chosen.name.toLowerCase().endsWith('.ogv')?'video/ogg':'video/mp4')+'">'+captions.map(c=>'<track kind="subtitles" src="'+IA+'/download/'+encodeURIComponent(id)+'/'+c.name.split('/').map(encodeURIComponent).join('/')+'" srclang="en" label="English">').join('')+'</video></div><div class="watch-info"><span class="eyebrow">FULL-LENGTH FILM · INTERNET ARCHIVE</span><h2>'+esc(title)+'</h2><div class="detail-meta">'+esc(m.year||m.date||'Date unknown')+' · '+esc(m.runtime||'Runtime not listed')+'</div><p>'+esc(desc||'No description supplied.')+'</p><div class="license-note"><b>Rights label:</b> <a href="'+esc(lic)+'" target="_blank" rel="noopener">View licence ↗</a><br><small>Licence information is supplied by the uploader. Verify the rights before reuse or redistribution.</small></div><div class="detail-actions"><a class="secondary-btn" href="'+IA+'/details/'+encodeURIComponent(id)+'" target="_blank" rel="noopener">Open Archive record ↗</a></div></div></div>';
+  $('filmPlayer').addEventListener('error',()=>toast('This file could not be played in this browser. Try the Archive record link.'));
+ }catch(e){$('detailContent').innerHTML='<div class="player-loading">'+esc(e.message)+'</div>';toast(e.message)}
+}
+function doSearch(){state.query=$('searchInput').value.trim();$('sectionTitle').textContent=state.query?'Search results':'Free full-length films';$('sectionEyebrow').textContent='PUBLIC DOMAIN & CREATIVE COMMONS';search(true)}
+$('searchInput').addEventListener('keydown',e=>{if(e.key==='Enter')doSearch()});
+$('searchInput').addEventListener('input',()=>{clearTimeout(window._searchTimer);window._searchTimer=setTimeout(doSearch,650)});
+$('loadMore').addEventListener('click',()=>{state.page++;search(false)});
+$('refreshBtn').addEventListener('click',()=>{state.query='';$('searchInput').value='';doSearch()});
+document.addEventListener('click',e=>{if(e.target.dataset.close)$('detailModal').classList.add('hidden');const c=e.target.closest('.movie-card');if(c)openFilm(c.dataset.id)});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')$('detailModal').classList.add('hidden')});
 if('serviceWorker'in navigator&&location.protocol.startsWith('http'))window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
-if(state.key)load();else $('settingsModal').classList.remove('hidden');
+search();
