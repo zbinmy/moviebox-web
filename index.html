@@ -1,19 +1,26 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#090b10"><meta name="description" content="Movie and TV discovery with a separate full-length public-domain and Creative Commons film catalogue.">
-<link rel="manifest" href="./manifest.webmanifest"><link rel="icon" href="./assets/icon.svg" type="image/svg+xml">
-<link rel="preconnect" href="https://image.tmdb.org"><link rel="preconnect" href="https://api.themoviedb.org"><link rel="preconnect" href="https://archive.org">
-<link rel="stylesheet" href="./styles.css"><title>MovieBox</title>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#08090d"><meta name="description" content="MovieBox-inspired discovery, watchlist, and browser playback shell.">
+  <link rel="manifest" href="./manifest.webmanifest"><link rel="icon" href="./assets/icon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://image.tmdb.org"><link rel="preconnect" href="https://api.themoviedb.org">
+  <link rel="stylesheet" href="./styles.css"><title>MovieBox</title>
 </head>
 <body>
-<header class="topbar"><a class="brand" href="#" aria-label="MovieBox home"><span class="brand-mark">M</span><span>movie<span class="accent">box</span></span></a>
-<div class="top-actions"><label class="searchbox"><span>⌕</span><input id="searchInput" type="search" placeholder="Search movies, shows..." autocomplete="off"></label></div></header>
-<div class="layout"><aside class="sidebar"><div class="nav-label">DISCOVER</div><button class="nav active" data-page="home">⌂ <span>Home</span></button><button class="nav" data-page="trending">✦ <span>Trending</span></button><button class="nav" data-page="movies">▣ <span>Movies</span></button><button class="nav" data-page="tv">▤ <span>TV Shows</span></button><button class="nav" data-page="freefilms">▶ <span>Free Films</span></button><div class="nav-label space">YOUR LIBRARY</div><button class="nav" data-page="watchlist">♡ <span>My List</span></button><div class="side-note">Discover films and series, keep your watchlist, and browse a separate catalogue of full-length films available from Internet Archive.</div></aside>
-<main id="main"><section id="hero" class="hero"><div class="hero-copy"><span class="eyebrow">YOUR NEXT WATCH STARTS HERE</span><h1>Find your<br><span class="accent">next favourite.</span></h1><p>Explore full-length films and series from rights-labelled public-domain and Creative Commons collections.</p><button class="primary-btn" id="heroExplore">Explore trending <span>→</span></button></div><div class="hero-art"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="hero-disc">M<span>✦</span></div></div></section>
-<section class="content-section"><div class="section-head"><div><span class="eyebrow" id="sectionEyebrow">HANDPICKED FOR YOU</span><h2 id="sectionTitle">Trending now</h2></div><div class="filters"><select id="sortSelect" aria-label="Sort titles"><option value="popularity.desc">Popular</option><option value="vote_average.desc">Top rated</option><option value="primary_release_date.desc">Newest</option></select></div></div><div id="status" class="status">Add your TMDB API key in Settings to load the live catalogue.</div><div id="grid" class="movie-grid"></div><button id="loadMore" class="secondary-btn hidden">Load more</button></section>
-<section id="rightsFootnote" class="rights-footnote hidden"><b>About Free Films</b><p>This separate catalogue searches Internet Archive for movies carrying public-domain or selected Creative Commons rights labels. Rights labels are uploader-supplied and not independently guaranteed. Some records may not have a compatible browser video file.</p></section></main></div>
-<div id="detailModal" class="modal hidden" role="dialog" aria-modal="true"><div class="modal-backdrop" data-close="1"></div><article class="detail-panel"><button class="close-btn" data-close="1" aria-label="Close">×</button><div id="detailContent"></div></article></div>
-<div id="toast" class="toast"></div><script src="./app.js" defer></script>
-</body></html>
+  <header class="topbar">
+    <a class="brand" href="#/home" aria-label="MovieBox Home"><span class="brand-mark">M</span><span>movie<span class="accent">box</span></span></a>
+    <label class="searchbox"><span aria-hidden="true">⌕</span><input id="searchInput" type="search" placeholder="Search movies and shows" autocomplete="off" aria-label="Search movies and shows"><button id="clearSearch" class="search-clear hidden" aria-label="Clear search">×</button></label>
+    <button class="avatar" id="profileButton" aria-label="Open profile">M</button>
+  </header>
+  <main id="app" tabindex="-1"><div class="loading-screen"><span class="spinner"></span>Loading MovieBox…</div></main>
+  <nav class="bottom-nav" aria-label="Main navigation">
+    <a href="#/home" data-tab="home"><span class="nav-icon">⌂</span><span>Home</span></a>
+    <a href="#/novelhub" data-tab="novelhub"><span class="nav-icon">▤</span><span>NovelHub</span></a>
+    <a href="#/downloads" data-tab="downloads"><span class="nav-icon">⇩</span><span>Downloads</span></a>
+    <a href="#/me" data-tab="me"><span class="nav-icon">◉</span><span>Me</span></a>
+  </nav>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="./app.js" defer></script>
+</body>
+</html>
