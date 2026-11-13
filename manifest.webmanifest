@@ -1,0 +1,1 @@
+{"name":"MovieBox Discovery","short_name":"MovieBox","start_url":"./","scope":"./","display":"standalone","background_color":"#090b10","theme_color":"#090b10","description":"Discover films and television, save a watchlist and view official trailers.","icons":[{"src":"./assets/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]}
