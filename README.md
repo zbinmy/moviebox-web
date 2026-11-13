@@ -1,33 +1,22 @@
-# MovieBox Discovery
+# MovieBox · Free Cinema
 
-A responsive, installable movie and TV discovery website. It uses the official **TMDB API** for catalogue metadata, search, ratings, posters, synopsis and official YouTube trailers.
+A responsive, installable full-length film website. The catalogue is sourced live from the Internet Archive Advanced Search API and restricted to records carrying public-domain or selected Creative Commons licence URLs. The player reads the item's metadata and selects an MP4, WebM or OGV file for in-browser playback.
 
-> This is an independent project, not affiliated with MovieBox or TMDB. It does not reproduce MovieBox's private APIs, extract protected streams, or provide unlicensed video links. Full-length playback must come from a service or media source you are authorised to use.
+## What works
+- Live Internet Archive catalogue search, with title search and pagination
+- Full-length in-page HTML5 video playback where a browser-compatible file exists
+- Rights label displayed with a link to the licence
+- Link to the original Internet Archive item
+- Responsive mobile/desktop layout and PWA support
+- No TMDB API key required
 
-## Features
-- Trending, movies, TV and multi-search through TMDB
-- Title detail views with synopsis, ratings, genres and official trailers
-- Browser-local My List
-- Responsive mobile/desktop layout
-- PWA manifest and service worker
-- API key entered by the site owner and stored in that browser's local storage
+## Rights and availability
+The app filters for records whose uploader-supplied `licenseurl` indicates public domain, CC0, CC BY or CC BY-SA. Internet Archive states that rights vary by film and that uploader licence claims are not guaranteed to be accurate. Check the source record and licence before reuse or redistribution. Some records have no compatible video derivative or may fail browser playback.
 
-## Setup
-1. Create a free TMDB account and request an API key at https://www.themoviedb.org/settings/api
-2. Open the deployed site and enter the **v3 API key** in Settings.
-3. The key is stored only in that browser. Do not put a private API Read Access Token in public source code.
+Sources:
+- Internet Archive Advanced Search API: https://archive.org/advancedsearch.php
+- Internet Archive Metadata API: https://archive.org/metadata/
+- Internet Archive guidance on movie rights and streaming: https://archivesupport.zendesk.com/hc/en-us/articles/360017808151-Movies-and-Videos-A-Basic-Guide
 
-## GitHub Pages
-This repository includes a GitHub Actions workflow. In GitHub, open **Settings → Pages** and set **Build and deployment → Source** to **GitHub Actions**. Pushes to `main` will deploy automatically. The site URL is:
-`https://zbinmy.github.io/moviebox-web/`
-
-## Local preview
-Serve the repository root with any static server, e.g.:
-`python3 -m http.server 8080`
-Then open http://localhost:8080.
-
-## Playback boundary
-TMDB supplies metadata and artwork, not movie files. The APK's private app endpoints and signed playback protocol are not a supported public web API. This project intentionally does not reverse-engineer or bypass access controls. To add full playback, integrate a licensed streaming provider or your own media server and authenticate through its documented API.
-
-## Privacy
-The TMDB v3 API key is stored in localStorage in the current browser. My List is also stored locally. Clearing browser site data removes both.
+## Deployment
+GitHub Actions deploys the static site to GitHub Pages on pushes to `main`.
