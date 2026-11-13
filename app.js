@@ -25,7 +25,7 @@ async function search(reset=true){
  finally{state.busy=false}
 }
 function videoFiles(files){
- const vids=(files||[]).filter(f=>!f.source&&f.name&&!f.name.includes('__ia_thumb')&&(/\.mp4$/i.test(f.name)||/\.webm$/i.test(f.name)||/\.ogv$/i.test(f.name))&&(/mpeg4|h\.264|webm|ogg|video/i.test(f.format||'')||/\.(mp4|webm|ogv)$/i.test(f.name)));
+ const vids=(files||[]).filter(f=>f.name&&!f.name.includes('__ia_thumb')&&(/\.mp4$/i.test(f.name)||/\.webm$/i.test(f.name)||/\.ogv$/i.test(f.name))&&(/mpeg4|h\.264|webm|ogg|video/i.test(f.format||'')||/\.(mp4|webm|ogv)$/i.test(f.name)));
  vids.sort((a,b)=>{const score=f=>(/\.mp4$/i.test(f.name)?100:0)+(/512kb|360p|480p|720p/i.test(f.name)?20:0)-(/original/i.test(f.name)?0:0);return score(b)-score(a)});
  return vids;
 }
